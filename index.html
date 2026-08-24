@@ -3199,8 +3199,6 @@
 
         // =====================================================================
         // PENGATURAN DATABASE UNTUK HOSTING INTERNET (ONLINE PUBLIK)
-        // Jika Anda mempublikasikan file ini ke internet (Netlify/Hosting), 
-        // ganti kata 'null' di bawah ini dengan konfigurasi Firebase milik Anda.
         // =====================================================================
         const myFirebaseConfig = {
             apiKey: "AIzaSyBAtSn_Bn23EMAY3uD5BXwGTzLF2NgbsW0",
@@ -3209,22 +3207,11 @@
             storageBucket: "siakad-smpn6-mamosalato.firebasestorage.app",
             messagingSenderId: "1000253670877",
             appId: "1:1000253670877:web:63602aa80697bcb1486234"
-        }; 
-        
-        /* CONTOH PENGISIAN JIKA SUDAH PUNYA FIREBASE:
-        const myFirebaseConfig = {
-            apiKey: "AIzaSyBxxxxxxx...",
-            authDomain: "siakad-smpn6.firebaseapp.com",
-            projectId: "siakad-smpn6",
-            storageBucket: "siakad-smpn6.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef"
         };
-        */
-
-        // Konfigurasi sistem dari lingkungan server
+        
+        // Konfigurasi sistem (Gunakan string eksplisit saat dihosting)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'siakad-smpn6-mamosalato';
-        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : (myFirebaseConfig ? JSON.stringify(myFirebaseConfig) : null);
+        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(myFirebaseConfig);
         
         window.initCloud = async function() {
             if (!firebaseConfigStr) {
@@ -3238,7 +3225,7 @@
                 const db = getFirestore(app);
                 const auth = getAuth(app);
 
-                // 1. Lakukan Autentikasi Aman sebelum mengakses data
+                // 1. Lakukan Autentikasi Aman
                 const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
                 if (token) {
                     await signInWithCustomToken(auth, token);
@@ -3246,27 +3233,27 @@
                     await signInAnonymously(auth);
                 }
 
-                // 2. Pastikan pengguna berhasil diotentikasi
                 if (!auth.currentUser) return;
                 
                 // 3. Tentukan jalur penyimpanan data resmi aplikasi
-                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'siakad', 'mainData');
+                // PERBAIKAN: Gunakan ID statis jika __app_id tidak ditemukan di lingkungan Netlify
+                const finalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-siakad-app';
+                const docRef = doc(db, 'artifacts', finalAppId, 'public', 'data', 'siakad', 'mainData');
 
-                // 4. Sinkronisasi Data Real-Time (Menarik data dari Cloud saat aplikasi dibuka/diupdate)
+                // 4. Sinkronisasi Data Real-Time
                 onSnapshot(docRef, (snapshot) => {
                     if (snapshot.exists()) {
                         const data = snapshot.data();
                         if (data && Object.keys(data).length > 0) {
                             window.setAppData(data);
-                            localStorage.setItem('siakadData', JSON.stringify(data)); // Backup lokal
+                            localStorage.setItem('siakadData', JSON.stringify(data)); 
                             
-                            // Perbarui layar secara instan jika ada perubahan dari perangkat lain
                             if (sessionStorage.getItem('siakad_logged_in') === 'true') {
                                 window.triggerRender();
                             }
                         }
                     } else {
-                        // Jika cloud kosong (pertama kali), unggah data yang ada saat ini
+                        // Jika cloud kosong, unggah data yang ada saat ini
                         const localDataStr = localStorage.getItem('siakadData');
                         if (localDataStr) {
                             setDoc(docRef, JSON.parse(localDataStr)).catch(e => console.error(e));
@@ -3274,19 +3261,24 @@
                     }
                 }, (error) => {
                     console.error("Gagal menarik data dari Cloud:", error);
+                    // Tampilkan pesan error jika onSnapshot gagal (misal karena Rules belum benar)
+                    const loginDbStatus = document.getElementById('loginDbStatus');
+                    if(loginDbStatus) {
+                        loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full shadow-sm relative transition-all duration-500";
+                        loginDbStatus.innerHTML = `<i class="fas fa-exclamation-triangle text-red-500"></i><span class="text-[10px] font-bold text-red-700 tracking-wider">KONEKSI DATABASE GAGAL</span>`;
+                    }
                 });
 
-                // 5. Fungsi Mengirim Data ke Cloud secara otomatis setiap ada perubahan
+                // 5. Fungsi Mengirim Data ke Cloud
                 window.saveDataToCloud = async function(data) {
-                    if (!auth.currentUser) return; // Cegah simpan jika belum login
+                    if (!auth.currentUser) return; 
                     try {
                         await setDoc(docRef, data);
                     } catch (e) {
                         console.error("Gagal menyimpan ke Cloud:", e);
-                        // Peringatan jika dokumen terlalu besar (batas 1MB per dokumen)
                         if(e.code === 'resource-exhausted') {
                             if(typeof window.showAppDialog === 'function') {
-                                window.showAppDialog('alert', 'Kapasitas Penuh', 'Kapasitas penyimpanan sistem penuh. Hapus beberapa dokumen lama atau perkecil ukuran foto logo agar data dapat disimpan kembali.');
+                                window.showAppDialog('alert', 'Kapasitas Penuh', 'Kapasitas penyimpanan sistem penuh.');
                             } else {
                                 alert('Kapasitas penyimpanan sistem penuh.');
                             }
@@ -3309,7 +3301,6 @@
                     syncBadge.classList.remove('text-gray-500');
                     syncBadge.classList.add('border', 'border-emerald-300', 'shadow-sm');
                     
-                    // --- KODE BARU: Mengubah Status di Halaman Login Menjadi Terhubung ---
                     const loginDbStatus = document.getElementById('loginDbStatus');
                     if (loginDbStatus) {
                         loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-full shadow-sm relative transition-all duration-500";
@@ -3321,19 +3312,22 @@
                             <span class="text-[10px] font-bold text-emerald-700 tracking-wider">DATABASE TERHUBUNG</span>
                         `;
                     }
-                    // ----------------------------------------------------------------------
 
-                    // Panggil notifikasi pop-up (Hanya dipanggil sekali saat baru berhasil konek)
                     if (!window.hasNotifiedCloud) {
                         if(typeof window.showToast === 'function') {
                             window.showToast('SIAKAD Online: Database Berhasil Terhubung!', 'success');
                         }
-                        window.hasNotifiedCloud = true; // Tandai agar tidak muncul berulang-ulang
+                        window.hasNotifiedCloud = true;
                     }
                 }
 
             } catch (error) {
                 console.error("Terjadi masalah sistem Cloud:", error);
+                 const loginDbStatus = document.getElementById('loginDbStatus');
+                 if(loginDbStatus) {
+                     loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full shadow-sm relative transition-all duration-500";
+                     loginDbStatus.innerHTML = `<i class="fas fa-times-circle text-red-500"></i><span class="text-[10px] font-bold text-red-700 tracking-wider">GAGAL MENGHUBUNGKAN</span>`;
+                 }
             }
         };
 
