@@ -3194,14 +3194,16 @@
     <!-- Modul Penyimpanan Cloud Permanen (Otomatis Tersimpan & Terpusat) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =====================================================================
         // PENGATURAN DATABASE UNTUK HOSTING INTERNET (ONLINE PUBLIK)
         // =====================================================================
+        // Your web app's Firebase configuration
         const myFirebaseConfig = {
-            apiKey: "AIzaSyBAtSn_Bn23EMAY3uD5BXwGTzLF2NgbsW0",
+            // SILAKAN COPY-PASTE SELURUH KODE FIREBASECONFIG INI DARI FIREBASE CONSOLE ANDA:
+            apiKey: "AIzaSyBAtSn_Bn23EMAY3uD5BXwGTzLF2NgbsW0", // <-- Ganti baris ini dengan API KEY asli Anda!
             authDomain: "siakad-smpn6-mamosalato.firebaseapp.com",
             projectId: "siakad-smpn6-mamosalato",
             storageBucket: "siakad-smpn6-mamosalato.firebasestorage.app",
@@ -3209,84 +3211,62 @@
             appId: "1:1000253670877:web:63602aa80697bcb1486234"
         };
         
-        // Konfigurasi sistem (Gunakan string eksplisit saat dihosting)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'siakad-smpn6-mamosalato';
-        const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : JSON.stringify(myFirebaseConfig);
-        
-        window.initCloud = async function() {
-            if (!firebaseConfigStr) {
-                console.warn("Konfigurasi Cloud tidak ditemukan. Menggunakan penyimpanan lokal.");
-                return;
-            }
 
+        window.initCloud = async function() {
             try {
-                const firebaseConfig = JSON.parse(firebaseConfigStr);
-                const app = initializeApp(firebaseConfig);
+                const app = initializeApp(myFirebaseConfig);
                 const db = getFirestore(app);
                 const auth = getAuth(app);
 
-                // 1. Lakukan Autentikasi Aman
-                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-                if (token) {
-                    await signInWithCustomToken(auth, token);
-                } else {
+                // 1. Lakukan Autentikasi Anonim DENGAN PELINDUNG ERROR
+                try {
                     await signInAnonymously(auth);
+                } catch (authError) {
+                    console.warn("Koneksi Firebase ditolak. Pastikan API Key BENAR dan domain Netlify sudah di-Whitelist.", authError);
+                    showError();
+                    return; // Hentikan proses agar tidak error beruntun
                 }
 
                 if (!auth.currentUser) return;
                 
-                // 3. Tentukan jalur penyimpanan data resmi aplikasi
-                // PERBAIKAN: Gunakan ID statis jika __app_id tidak ditemukan di lingkungan Netlify
-                const finalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-siakad-app';
-                const docRef = doc(db, 'artifacts', finalAppId, 'public', 'data', 'siakad', 'mainData');
+                // 2. Jalur Database (Menyesuaikan dengan nama aplikasi Anda)
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'siakad', 'mainData');
 
-                // 4. Sinkronisasi Data Real-Time
+                // 3. Tarik Data Realtime
                 onSnapshot(docRef, (snapshot) => {
                     if (snapshot.exists()) {
                         const data = snapshot.data();
                         if (data && Object.keys(data).length > 0) {
                             window.setAppData(data);
                             localStorage.setItem('siakadData', JSON.stringify(data)); 
-                            
                             if (sessionStorage.getItem('siakad_logged_in') === 'true') {
                                 window.triggerRender();
                             }
                         }
                     } else {
-                        // Jika cloud kosong, unggah data yang ada saat ini
+                        // Jika di cloud kosong, paksa simpan data lokal saat ini ke cloud
                         const localDataStr = localStorage.getItem('siakadData');
                         if (localDataStr) {
                             setDoc(docRef, JSON.parse(localDataStr)).catch(e => console.error(e));
                         }
                     }
                 }, (error) => {
-                    console.error("Gagal menarik data dari Cloud:", error);
-                    // Tampilkan pesan error jika onSnapshot gagal (misal karena Rules belum benar)
-                    const loginDbStatus = document.getElementById('loginDbStatus');
-                    if(loginDbStatus) {
-                        loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full shadow-sm relative transition-all duration-500";
-                        loginDbStatus.innerHTML = `<i class="fas fa-exclamation-triangle text-red-500"></i><span class="text-[10px] font-bold text-red-700 tracking-wider">KONEKSI DATABASE GAGAL</span>`;
-                    }
+                    console.error("Gagal menarik data:", error);
+                    showError();
                 });
 
-                // 5. Fungsi Mengirim Data ke Cloud
+                // 4. Fungsi Simpan Data (Dipanggil setiap kali ada perubahan)
                 window.saveDataToCloud = async function(data) {
                     if (!auth.currentUser) return; 
                     try {
                         await setDoc(docRef, data);
                     } catch (e) {
-                        console.error("Gagal menyimpan ke Cloud:", e);
-                        if(e.code === 'resource-exhausted') {
-                            if(typeof window.showAppDialog === 'function') {
-                                window.showAppDialog('alert', 'Kapasitas Penuh', 'Kapasitas penyimpanan sistem penuh.');
-                            } else {
-                                alert('Kapasitas penyimpanan sistem penuh.');
-                            }
-                        }
+                        console.error("Gagal menyimpan:", e);
                     }
                 };
 
-                // 6. Ubah Indikator UI menjadi 'TERHUBUNG KE CLOUD'
+                // 5. Ubah UI jadi Hijau (Berhasil Terhubung)
                 const syncBadge = document.getElementById('syncBadge');
                 if(syncBadge) {
                     syncBadge.innerHTML = `
@@ -3312,26 +3292,23 @@
                             <span class="text-[10px] font-bold text-emerald-700 tracking-wider">DATABASE TERHUBUNG</span>
                         `;
                     }
-
-                    if (!window.hasNotifiedCloud) {
-                        if(typeof window.showToast === 'function') {
-                            window.showToast('SIAKAD Online: Database Berhasil Terhubung!', 'success');
-                        }
-                        window.hasNotifiedCloud = true;
-                    }
                 }
 
             } catch (error) {
-                console.error("Terjadi masalah sistem Cloud:", error);
-                 const loginDbStatus = document.getElementById('loginDbStatus');
-                 if(loginDbStatus) {
-                     loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full shadow-sm relative transition-all duration-500";
-                     loginDbStatus.innerHTML = `<i class="fas fa-times-circle text-red-500"></i><span class="text-[10px] font-bold text-red-700 tracking-wider">GAGAL MENGHUBUNGKAN</span>`;
-                 }
+                console.error("Terjadi masalah sistem cloud:", error);
+                showError();
             }
         };
 
-        // Jalankan Inisialisasi Cloud saat dokumen siap
+        function showError() {
+            const loginDbStatus = document.getElementById('loginDbStatus');
+            if(loginDbStatus) {
+                loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-full shadow-sm relative transition-all duration-500";
+                loginDbStatus.innerHTML = `<i class="fas fa-times-circle text-red-500"></i><span class="text-[10px] font-bold text-red-700 tracking-wider">GAGAL MENGHUBUNGKAN</span>`;
+            }
+        }
+
+        // Jalankan sistem cloud saat halaman selesai dimuat
         if (document.readyState === 'complete') {
             window.initCloud();
         } else {
