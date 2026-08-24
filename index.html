@@ -104,6 +104,12 @@
 </head>
 <body class="text-gray-800 h-screen overflow-hidden flex">
 
+    <!-- Notifikasi Pop-up (Toast) Muncul dari Atas -->
+    <div id="toastNotification" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[150] transition-all duration-500 opacity-0 -translate-y-10 pointer-events-none flex items-center gap-2 px-4 py-3 rounded-full shadow-2xl font-medium text-sm max-w-[90vw] text-center w-max">
+        <span id="toastIcon" class="text-lg"></span>
+        <span id="toastMessage">Pesan Notifikasi</span>
+    </div>
+
     <!-- Layar Login (Overlay) -->
     <div id="loginScreen" class="fixed inset-0 z-[100] flex items-center justify-center transition-opacity duration-500 hidden" style="background-color: #f4f7fa; background-image: url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'80\' height=\'138.6\' viewBox=\'0 0 80 138.6\'%3E%3Cg stroke=\'%2394a3b8\' stroke-width=\'2\' fill=\'none\' opacity=\'0.4\'%3E%3Cpath d=\'M40 138.6v-46.2M40 46.2V0M0 69.3l40-23.1M80 69.3L40 46.2M0 69.3l40 23.1M80 69.3L40 92.4M40 92.4l40 23.1M40 92.4L0 115.5M40 46.2l40-23.1M40 46.2L0 23.1\'/%3E%3C/g%3E%3C/svg%3E');">
         <div class="w-full max-w-[1000px] mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-12 relative z-10">
@@ -120,12 +126,11 @@
                     SMP NEGERI 6 MAMOSALATO<br>
                     <span class="font-medium text-[10px] sm:text-xs text-gray-400">KAB. MOROWALI UTARA</span>
                 </p>
-                <div class="mt-8 inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full shadow-sm relative">
-                    <div class="relative flex h-3 w-3">
-                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                    </div>
-                    <span class="text-[10px] font-bold text-emerald-600 tracking-wider">DATABASE TERHUBUNG</span>
+                
+                <!-- Status Koneksi Loading (Akan berubah otomatis saat Cloud terhubung) -->
+                <div id="loginDbStatus" class="mt-8 inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-full shadow-sm relative transition-all duration-300">
+                    <i class="fas fa-spinner fa-spin text-blue-500 text-sm"></i>
+                    <span class="text-[10px] font-bold text-gray-500 tracking-wider">MENGHUBUNGKAN DATABASE...</span>
                 </div>
             </div>
 
@@ -316,8 +321,10 @@
                     <i class="fas fa-bars text-xl"></i>
                 </button>
                 <h2 id="pageTitle" class="text-xl font-semibold text-gray-800">Dashboard</h2>
-                <span id="syncBadge" class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold tracking-wider transition-colors duration-300">
-                    <i class="fas fa-cloud-upload-alt"></i> LOCAL MODE
+                
+                <!-- Badge Indikator Ditampilkan di HP juga -->
+                <span id="syncBadge" class="flex items-center gap-1.5 px-2 sm:px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-[8px] sm:text-[10px] font-bold tracking-wider transition-colors duration-300">
+                    <i class="fas fa-cloud-upload-alt"></i> <span class="hidden sm:inline">LOCAL MODE</span>
                 </span>
             </div>
             <div class="flex items-center gap-4">
@@ -2871,6 +2878,32 @@
             currentConfirmCallback = null;
         }
 
+        // --- FUNGSI NOTIFIKASI TOAST (POP-UP) ---
+        window.showToast = function(message, type = 'success') {
+            const toast = document.getElementById('toastNotification');
+            const icon = document.getElementById('toastIcon');
+            const msg = document.getElementById('toastMessage');
+
+            msg.innerText = message;
+            
+            // Atur gaya desainnya
+            toast.className = 'fixed top-5 left-1/2 transform -translate-x-1/2 z-[150] transition-all duration-500 flex items-center gap-2 px-5 py-3 rounded-full shadow-2xl font-bold text-xs sm:text-sm max-w-[90vw] text-center w-max pointer-events-none translate-y-0 opacity-100';
+            
+            if (type === 'success') {
+                toast.classList.add('bg-emerald-600', 'text-white', 'border-2', 'border-emerald-400');
+                icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+            } else if (type === 'error') {
+                toast.classList.add('bg-red-600', 'text-white', 'border-2', 'border-red-400');
+                icon.innerHTML = '<i class="fas fa-exclamation-triangle"></i>';
+            }
+
+            // Sembunyikan otomatis setelah 3 detik
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('-translate-y-10', 'opacity-0');
+            }, 3000);
+        }
+
         // --- FUNGSI PROSES AKADEMIK (MUTASI / NAIK KELAS) ---
         function openAcademicActionModal(studentId) {
             const student = appData.siswa.find(s => s.id === studentId);
@@ -3265,16 +3298,38 @@
                 const syncBadge = document.getElementById('syncBadge');
                 if(syncBadge) {
                     syncBadge.innerHTML = `
-                        <div class="relative flex h-2 w-2 mr-1">
+                        <div class="relative flex h-2 w-2 sm:mr-1">
                             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </div>
-                        <i class="fas fa-cloud text-emerald-500"></i> 
-                        <span class="text-emerald-700 ml-1 font-black">DATABASE CLOUD AKTIF</span>
+                        <i class="fas fa-cloud text-emerald-500 hidden sm:block"></i> 
+                        <span class="text-emerald-700 sm:ml-1 font-black">CLOUD AKTIF</span>
                     `;
                     syncBadge.classList.replace('bg-gray-100', 'bg-emerald-50');
                     syncBadge.classList.remove('text-gray-500');
                     syncBadge.classList.add('border', 'border-emerald-300', 'shadow-sm');
+                    
+                    // --- KODE BARU: Mengubah Status di Halaman Login Menjadi Terhubung ---
+                    const loginDbStatus = document.getElementById('loginDbStatus');
+                    if (loginDbStatus) {
+                        loginDbStatus.className = "mt-8 inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-full shadow-sm relative transition-all duration-500";
+                        loginDbStatus.innerHTML = `
+                            <div class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </div>
+                            <span class="text-[10px] font-bold text-emerald-700 tracking-wider">DATABASE TERHUBUNG</span>
+                        `;
+                    }
+                    // ----------------------------------------------------------------------
+
+                    // Panggil notifikasi pop-up (Hanya dipanggil sekali saat baru berhasil konek)
+                    if (!window.hasNotifiedCloud) {
+                        if(typeof window.showToast === 'function') {
+                            window.showToast('SIAKAD Online: Database Berhasil Terhubung!', 'success');
+                        }
+                        window.hasNotifiedCloud = true; // Tandai agar tidak muncul berulang-ulang
+                    }
                 }
 
             } catch (error) {
